@@ -12,11 +12,6 @@ export interface ExclusiveFriendRequestDoc extends BaseDoc {
   to: ObjectId;
 }
 
-export interface Favorite extends BaseDoc {
-  user: ObjectId;
-  item: ObjectId;
-}
-
 export default class ExclusiveFriendConcept {
   public readonly friends = new DocCollection<ExclusiveFriendDoc>("exclusiveFriends");
   public readonly requests = new DocCollection<ExclusiveFriendRequestDoc>("exclusiveFriendsRequests");
