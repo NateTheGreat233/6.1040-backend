@@ -2,13 +2,111 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Friend, Post, User, WebSession } from "./app";
+import { ConversationPrompt, ExclusiveFriend, Friend, Post, Profile, User, WebSession } from "./app";
 import { PostDoc, PostOptions } from "./concepts/post";
 import { UserDoc } from "./concepts/user";
 import { WebSessionDoc } from "./concepts/websession";
 import Responses from "./responses";
 
 class Routes {
+
+  // ********** SESSION ROUTES **********
+
+  @Router.put("/signOut")
+  async signOut(session: WebSessionDoc) {
+    // signs the user out of the app
+  }
+
+  // ********** PROFILE ROUTES **********
+
+  @Router.get("/profile/:id")
+  async getProfile(session: WebSessionDoc, username?: string) {
+    let user;
+    if (username === undefined) {
+      // get profile for currently authenticated user
+      user = WebSession.getUser(session);
+    } else {
+      // get profile for user corresponding to username
+      user = (await User.getUserByUsername(username))._id;
+    }
+
+    return await Profile.getProfile(user);
+  }
+
+  @Router.put("/profile")
+  async setProfile(session: WebSessionDoc) {
+    // updates the profile for a given user
+  }
+
+  // ********** DUAL PROFILE ROUTES **********
+
+  @Router.get("/dualProfile")
+  async getDualProfile(session: WebSessionDoc) {
+    // fetches the user's dual profile
+  }
+
+  @Router.put("/dualProfile/:id")
+  async updateDualProfile(session: WebSessionDoc, id: string, newContent: string) {
+    // updates the dual profile
+  }
+
+  // ********** DUAL POST ROUTES **********
+
+  @Router.post("/post")
+  async proposeDualPost(session: WebSessionDoc, coAuthor: string) {
+    // proposes a new dual post
+  }
+
+  @Router.get("/post/:num")
+  async getDualPosts(session: WebSessionDoc) {
+    // gets {num} posts from the database
+  }
+
+  @Router.put("/post/approve/:id")
+  async approveDualPost(session: WebSessionDoc) {
+    // approves a dual post
+  }
+
+  @Router.put("/post/deny/:id")
+  async denyDualPost(session: WebSessionDoc) {
+    // denies a dual post
+  }
+
+  @Router.delete("/post/:id")
+  async deleteDualPost(session: WebSessionDoc) {
+    // deletes a dual post
+  }
+
+  // ********** EXCLUSIVE FRIEND ROUTES **********
+
+  @Router.post("/exclusiveFriend/request/:to")
+  async requestExclusiveFriend(session: WebSessionDoc, to: string) {
+    const user = WebSession.getUser(session);
+    const toId = (await User.getUserByUsername(to))._id;
+    return await ExclusiveFriend.request(user, toId);
+  }
+
+  @Router.delete("/exclusiveFriend/request/remove")
+  async removeExclusiveFriendRequest(session: WebSessionDoc) {
+    const user = WebSession.getUser(session);
+    return await ExclusiveFriend.removeRequest(user);
+  }
+
+  @Router.delete("/exclusiveFriend/remove")
+  async removeExclusiveFriend(session: WebSessionDoc) {
+    const user = WebSession.getUser(session);
+    return await ExclusiveFriend.removeExclusiveFriend(user);
+  }
+
+  // ********** CONVERSATION PROMPT ROUTES **********
+
+  @Router.get("/prompt")
+  async getConversationPrompt() {
+    return await ConversationPrompt.getPrompt();
+  }
+
+  // ********** EXISTING ROUTES **********
+
   @Router.get("/session")
   async getSessionUser(session: WebSessionDoc) {
     const user = WebSession.getUser(session);

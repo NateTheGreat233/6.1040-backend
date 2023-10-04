@@ -12,6 +12,36 @@ type operation = {
 
 const operations: operation[] = [
   {
+    name: "Get Profile (empty for current user)",
+    endpoint: "/api/profile/:id",
+    method: "GET",
+    fields: { id: "input" }
+  },
+  {
+    name: "Request Exclusive Friend",
+    endpoint: "/api/exclusiveFriend/request/:to",
+    method: "POST",
+    fields: { to: "input" },
+  },
+  {
+    name: "Remove Exclusive Friend Request",
+    endpoint: "/api/exclusiveFriend/request/remove",
+    method: "DELETE",
+    fields: {},
+  },
+  {
+    name: "Remove Exclusive Friend",
+    endpoint: "/api/exclusiveFriend/remove",
+    method: "DELETE",
+    fields: {},
+  },
+  {
+    name: "Generate Conversation Prompt",
+    endpoint: "/api/prompt",
+    method: "GET",
+    fields: {},
+  },
+  {
     name: "Get Session User (logged in user)",
     endpoint: "/api/session",
     method: "GET",
