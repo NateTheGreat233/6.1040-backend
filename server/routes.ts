@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { ConversationPrompt, DualPost, ExclusiveFriend, Profile, User, WebSession } from "./app";
+import { ConversationPrompt, DualPost, DualProfile, ExclusiveFriend, Profile, User, WebSession } from "./app";
 import { ProfileDoc } from "./concepts/profile";
 import { UserDoc } from "./concepts/user";
 import { WebSessionDoc } from "./concepts/websession";
@@ -42,12 +42,20 @@ class Routes {
 
   @Router.get("/dualProfile")
   async getDualProfile(session: WebSessionDoc) {
-    // fetches the user's dual profile
+    const user = WebSession.getUser(session);
+    return await DualProfile.getDualProfile(user);
   }
 
-  @Router.put("/dualProfile/:id")
-  async updateDualProfile(session: WebSessionDoc, id: string, newContent: string) {
-    // updates the dual profile
+  @Router.put("/dualProfile/update/time")
+  async updateStartTime(session: WebSessionDoc, time: Date) {
+    const user = WebSession.getUser(session);
+    return await DualProfile.updateStartTime(user, time);
+  }
+
+  @Router.put("/dualProfile/update/scrapbook")
+  async updateScrapbook(session: WebSessionDoc, scrapbook: { caption: string, image: string, date: Date }[]) {
+    const user = WebSession.getUser(session);
+    return await DualProfile.updateScrapbook(user, scrapbook);
   }
 
   // ********** DUAL POST ROUTES **********
@@ -116,7 +124,15 @@ class Routes {
   async requestExclusiveFriend(session: WebSessionDoc, to: string) {
     const user = WebSession.getUser(session);
     const toId = (await User.getUserByUsername(to))._id;
-    return await ExclusiveFriend.request(user, toId);
+    await ExclusiveFriend.request(user, toId);
+    try {
+      if (await ExclusiveFriend.getExclusiveFriend(user)) {
+        // request was reciprocated
+        await DualProfile.createDualProfile(user, toId, new Date());
+      }
+    } catch (e) {}
+
+    return { msg: "Successfully sent request" };
   }
 
   @Router.delete("/exclusiveFriend/request/remove")
@@ -130,6 +146,7 @@ class Routes {
     const user = WebSession.getUser(session);
     const { posts } = await DualPost.getDualPostsFromAuthor(user);
     await DualPost.delete(posts.map((post) => post._id), user);
+    await DualProfile.deleteDualProfile(user);
     return await ExclusiveFriend.removeExclusiveFriend(user);
   }
 
@@ -184,6 +201,7 @@ class Routes {
     try { await ExclusiveFriend.removeExclusiveFriend(user) } catch (e) {};
     const { posts } = await DualPost.getDualPostsFromAuthor(user);
     await DualPost.delete(posts.map((post) => post._id), user);
+    await DualProfile.deleteDualProfile(user);
     return await User.delete(user);
   }
 

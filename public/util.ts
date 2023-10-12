@@ -54,6 +54,24 @@ const operations: operation[] = [
     fields: { _id: "input" }
   },
   {
+    name: "Get Dual Profile",
+    endpoint: "/api/dualProfile",
+    method: "GET",
+    fields: {}
+  },
+  {
+    name: "Update Dual Profile Time",
+    endpoint: "/api/dualProfile/update/time",
+    method: "PUT",
+    fields: { time: "input" }
+  },
+  {
+    name: "Update Dual Profile Scrapbook",
+    endpoint: "/api/dualProfile/update/scrapbook",
+    method: "PUT",
+    fields: { scrapbook: "input" }
+  },
+  {
     name: "Get Profile",
     endpoint: "/api/profile/:username",
     method: "GET",
