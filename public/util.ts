@@ -15,13 +15,13 @@ const operations: operation[] = [
     name: "Propose Dual Post",
     endpoint: "api/post",
     method: "POST",
-    fields: { content: "input", image: "textarea" }
+    fields: { content: "input", image: "input" }
   },
   {
     name: "Modify Dual Post",
     endpoint: "api/post/update/:_id",
     method: "PUT",
-    fields: { _id: "input", content: "input", image: "textarea" }
+    fields: { _id: "input", content: "input", image: "input" }
   },
   {
     name: "Get Public Dual Posts",
@@ -62,14 +62,14 @@ const operations: operation[] = [
   {
     name: "Update Dual Profile Time",
     endpoint: "/api/dualProfile/update/time",
-    method: "PUT",
+    method: "POST",
     fields: { time: "input" }
   },
   {
-    name: "Update Dual Profile Scrapbook",
+    name: "Addd Dual Profile Scrapbook Entry",
     endpoint: "/api/dualProfile/update/scrapbook",
-    method: "PUT",
-    fields: { scrapbook: "input" }
+    method: "POST",
+    fields: { caption: "input", image: "input", date: "input" }
   },
   {
     name: "Get Profile",
@@ -218,7 +218,7 @@ function fieldsToHtml(fields: Record<string, Field>, indent = 0, prefix = ""): s
       return `
         <div class="field" style="margin-left: ${indent}px">
           <label>${name}:
-          ${typeof tag === "string" ? `<${tag} name="${prefix}${name}"></${tag}>` : fieldsToHtml(tag, indent + 10, prefix + name + ".")}
+          ${typeof tag === "string" ? `<${tag} name="${prefix}${name}" type="${name === 'image' ? 'file' : 'text'}" accept="image/*"></${tag}>` : fieldsToHtml(tag, indent + 10, prefix + name + ".")}
           </label>
         </div>`;
     })
@@ -271,9 +271,19 @@ async function submitEventHandler(e: Event) {
     return param;
   });
 
-  const data = prefixedRecordIntoObject(reqData as Record<string, string>);
-
+  let data = prefixedRecordIntoObject(reqData as Record<string, string>);
   updateResponse("", "Loading...");
+
+  // *** START OF MODIFIED BY ME ***
+
+  if (data.image !== undefined) {
+    const image = data.image as File;
+    // we need to grab the image and turn it into something we can pass to our handlers
+    data = {...data, image: { buffer: JSON.stringify(new Uint8Array(await image.arrayBuffer())), mimeType: image.type }};
+  }
+
+  // *** END OF MODIFIED BY ME ***
+
   const response = await request($method as HttpMethod, endpoint as string, Object.keys(data).length > 0 ? data : undefined);
   updateResponse(response.$statusCode.toString(), JSON.stringify(response.$response, null, 2));
 }

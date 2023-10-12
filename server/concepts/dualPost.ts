@@ -1,11 +1,12 @@
 import { ObjectId } from "mongodb";
 import DocCollection, { BaseDoc } from "../framework/doc";
+import { storeInS3 } from "../framework/utils";
 import { BadValuesError, NotAllowedError, NotFoundError } from "./errors";
 
 export interface DualPostDoc extends BaseDoc {
   approved: boolean;
   content: string;
-  image: string
+  imageUrl: string
   date: Date;
   proposer: ObjectId;
   approver: ObjectId;
@@ -26,14 +27,16 @@ export default class DualPostConcept {
     return { msg: "Personal Dual Posts fetched successfully!", posts };
   }
 
-  public async propose(proposer: ObjectId, approver: ObjectId, content: string, image: string) {
-    const _id = await this.dualPosts.createOne({ approved: false, content, image, date: new Date(), proposer, approver });
+  public async propose(proposer: ObjectId, approver: ObjectId, content: string, image: { buffer: Uint8Array, mimeType: string }) {
+    const imageUrl = await storeInS3(image.buffer, image.mimeType);
+    const _id = await this.dualPosts.createOne({ approved: false, content, imageUrl, date: new Date(), proposer, approver });
     return { msg: "Dual Post proposed successfully!", dualPost: await this.dualPosts.readOne({ _id }) };
   }
 
-  public async modify(_id: ObjectId, author: ObjectId, update: Partial<DualPostDoc>) {
+  public async modify(_id: ObjectId, author: ObjectId, update: { content: string, buffer: Uint8Array, mimeType: string }) {
     await this.canModifyPost(_id, author);
-    const post = await this.dualPosts.updateOne({ _id }, update);
+    const imageUrl = await storeInS3(update.buffer, update.mimeType);
+    const post = await this.dualPosts.updateOne({ _id }, { imageUrl, content: update.content });
     return { msg: "Post modified successfully!", post };
   }
 
@@ -50,19 +53,25 @@ export default class DualPostConcept {
   }
 
   public async delete(ids: Iterable<ObjectId>, deleter: ObjectId) {
-    const fns = [async (id: ObjectId) => await this.canDeleteDualPost(id, deleter), async (id: ObjectId) => await this.dualPosts.deleteOne({ _id: id })];
-    for (const fn of fns) {
-      for (const id of ids) {
-        await fn(id);
-      }
+    const checks = [];
+    for (const id of ids) {
+      checks.push(this.canDeleteDualPost(id, deleter));
     }
+    await Promise.all(checks);
+
+    const deletions = [];
+    for (const id of ids) {
+      deletions.push(this.dualPosts.deleteOne({ _id: id }));
+    }
+    await Promise.all(deletions);
+
     return { msg: "Dual Post(s) deleted successfully!" };
   }
 
   private async canApproveOrDeny(_id: ObjectId, user: ObjectId) {
-    const proposedPost = await this.dualPosts.readOne({ _id });
+    const proposedPost = await this.dualPosts.readOne({ _id, approved: false });
     if (proposedPost === null) {
-      throw new NotFoundError("This post doesn't exist");
+      throw new NotFoundError("This post doesn't exist or has already been approved");
     }
     if (proposedPost.approver.toString() !== user.toString()) {
       throw new NotAllowedError("Not authorized to approve or deny this post.");

@@ -7,6 +7,8 @@ import { ProfileDoc } from "./concepts/profile";
 import { UserDoc } from "./concepts/user";
 import { WebSessionDoc } from "./concepts/websession";
 
+type Image = { buffer: string, mimeType: string };
+
 class Routes {
 
   // ********** SESSION ROUTES **********
@@ -46,29 +48,32 @@ class Routes {
     return await DualProfile.getDualProfile(user);
   }
 
-  @Router.put("/dualProfile/update/time")
+  @Router.post("/dualProfile/update/time")
   async updateStartTime(session: WebSessionDoc, time: Date) {
     const user = WebSession.getUser(session);
     return await DualProfile.updateStartTime(user, time);
   }
 
-  @Router.put("/dualProfile/update/scrapbook")
-  async updateScrapbook(session: WebSessionDoc, scrapbook: { caption: string, image: string, date: Date }[]) {
+  @Router.post("/dualProfile/update/scrapbook")
+  async addToScrapbook(session: WebSessionDoc, caption: string, image: Image, date: Date) {
+    const imageData = new Uint8Array(Object.values(JSON.parse(image.buffer)));
     const user = WebSession.getUser(session);
-    return await DualProfile.updateScrapbook(user, scrapbook);
+    return await DualProfile.addToScrapbook(user, { image: {...image, buffer: imageData }, caption, date });
   }
 
   // ********** DUAL POST ROUTES **********
 
   @Router.post("/post")
-  async proposeDualPost(session: WebSessionDoc, content: string, image: string) {
+  async proposeDualPost(session: WebSessionDoc, content: string, image: Image) {
+    const imageData = new Uint8Array(Object.values(JSON.parse(image.buffer)));
     const user = WebSession.getUser(session);
+    let exclusiveFriend;
     try {
-      const exclusiveFriend = await ExclusiveFriend.getExclusiveFriend(user);
-      return await DualPost.propose(user, exclusiveFriend, content, image);
+      exclusiveFriend = await ExclusiveFriend.getExclusiveFriend(user);
     } catch (e) {
       return { msg: "You must have an exclusive friend to propose a dual post." };
     }
+    return await DualPost.propose(user, exclusiveFriend, content, { buffer: imageData, mimeType: image.mimeType });
   }
 
   @Router.get("/post/personal")
@@ -83,9 +88,10 @@ class Routes {
   }
 
   @Router.put("/post/update/:_id")
-  async modifyDualPost(session: WebSessionDoc, _id: ObjectId, content: string, image: string) {
+  async modifyDualPost(session: WebSessionDoc, _id: ObjectId, content: string, image: Image) {
+    const imageData = new Uint8Array(Object.values(JSON.parse(image.buffer)));
     const user = WebSession.getUser(session);
-    return await DualPost.modify(_id, user, { content, image });
+    return await DualPost.modify(_id, user, { content, buffer: imageData, mimeType: image.mimeType });
   }
 
   @Router.get("/post/:num")

@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import DocCollection, { BaseDoc } from "../framework/doc";
+import { storeInS3 } from "../framework/utils";
 import { NotAllowedError, NotFoundError } from "./errors";
 
 export interface DualProfileDoc extends BaseDoc {
@@ -7,7 +8,7 @@ export interface DualProfileDoc extends BaseDoc {
     user1: ObjectId,
     user2: ObjectId,
     scrapbook: {
-        image: string,
+        imageUrl: string,
         caption: string,
         date: Date,
     }[],
@@ -39,8 +40,14 @@ export default class DualProfileConcept {
         return { msg: "Successfully updated start time"};
     }
 
-    public async updateScrapbook(user: ObjectId, scrapbook: { image: string, caption: string, date: Date }[] ) {
-        const updateResult = await this.dualProfiles.updateOne({ $or: [{ user1: user }, { user2: user }] }, { scrapbook });
+    public async addToScrapbook(user: ObjectId, entry: { image: { buffer: Uint8Array, mimeType: string }, caption: string, date: Date }) {
+        const imageUrl = await storeInS3(entry.image.buffer, entry.image.mimeType);
+        const profile = await this.getDualProfile(user);
+        const existingScrapbook = profile.dualProfile.scrapbook;
+        const updateResult = await this.dualProfiles.updateOne({ 
+            $or: [{ user1: user }, { user2: user }] }, 
+            { scrapbook: [...existingScrapbook, { imageUrl, caption: entry.caption, date: entry.date }] 
+        });
         if (updateResult.modifiedCount !== 1) {
             throw new NotFoundError("Could not find a dual profile");
         }
