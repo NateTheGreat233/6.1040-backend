@@ -20,16 +20,19 @@ export default class ExclusiveFriendConcept {
     if (from.toString() === to.toString()) {
       throw new NotAllowedError("You cannot request yourself!");
     }
-
-    // check to see if either user already has an exclusive friend
-    const friendship = await this.friends.readOne({
-      $or: [
-        { user1: from, user2: to },
-        { user1: to, user2: from },
-      ],
-    });
-    if (friendship !== null) {
-      throw new NotAllowedError("Either you or the person you are requesting already has an exclusive friend. You can only have 1 exclusive friend at a time.");
+    
+    let numWithFriend = 0;
+    try {
+      await this.getExclusiveFriend(from);
+      numWithFriend += 1;
+    } catch (e) {}
+    try {
+      await this.getExclusiveFriend(to);
+      numWithFriend += 1;
+    } catch (e) {}
+    
+    if (numWithFriend > 0) {
+      throw new NotAllowedError("Either you or the person you are requesting already has an exclusive friend. You can only have 1 at a time.");
     }
 
     // check to see if this user has already requested someone
@@ -69,7 +72,12 @@ export default class ExclusiveFriendConcept {
     return { msg: "Successfully removed exclusive friend" };
   }
 
-  public async areExclusiveFriends(first: ObjectId, second: ObjectId) {
-    return this.friends.readOne({ $or: [{user1: first, user2: second}, {user1: second, user2: first}] }) !== null;
+  public async getExclusiveFriend(user: ObjectId) {
+    const friendship = await this.friends.readOne({ $or: [{ user1: user }, { user2: user }] });
+    if (friendship === null) {
+      throw new NotFoundError("You don't have an exclusive friend");
+    }
+
+    return friendship.user1.toString() === user.toString() ? friendship.user2 : friendship.user1;
   }
 }

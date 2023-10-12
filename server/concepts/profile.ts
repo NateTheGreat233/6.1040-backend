@@ -10,14 +10,14 @@ export interface ProfileDoc extends BaseDoc {
 export default class ProfileConcept {
     private readonly profiles = new DocCollection<ProfileDoc>("profiles");
 
-    public async setProfile(entityId: ObjectId, name: string) {
+    public async setProfile(entityId: ObjectId, update: Partial<ProfileDoc>) {
         try {
             await this.getProfile(entityId);
             // profile exists, update existing profile
-            await this.profiles.updateOne({ entityId }, { name });
+            await this.profiles.updateOne({ entityId }, update);
         } catch (_err) {
             // no profile exists, create a new one
-            await this.profiles.createOne({ entityId, name });
+            await this.profiles.createOne({ entityId, ...update });
         }
 
         return { msg: "Successfully set profile" };
@@ -30,5 +30,10 @@ export default class ProfileConcept {
         }
 
         return { msg: "Successfully fetched profile", profile };
+    }
+
+    public async deleteProfile(entityId: ObjectId) {
+        const deleteResult = await this.profiles.deleteOne({ entityId });
+        return { msg: deleteResult.deletedCount === 1 ? "Successfully deleted" : "Could not delete profile" };
     }
 }
