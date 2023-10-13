@@ -1,9 +1,18 @@
 import { ObjectId } from "mongodb";
 import OpenAI from "openai";
+import DocCollection, { BaseDoc } from "../framework/doc";
+
+export interface ConversationPromptDoc extends BaseDoc {
+  requesterId: ObjectId;
+  cachedPrompts: Array<string>;
+  previousPrompts: Array<string>;
+}
 
 export default class ConversationPromptConcept {
   private static numPromptsToFetch = 3;
   private static maxTokens = 25;
+  private static model = 'gpt-3.5-turbo';
+  private static temperature = 1.2;
   private static promptExamples = [
     'Would you rather have the neck of a giraffe or the body of a hippo?',
     'If you could eat one food for the rest of your life, what would it be?',
@@ -15,58 +24,58 @@ export default class ConversationPromptConcept {
     "Would you rather lose your sight or your memories?"
   ]
 
-  private readonly openAIClient: OpenAI;
-  private readonly cachedPrompts: Map<string, Array<string>>;  // maps requester to prompts that are ready-to-go and unseen by the requester
-  private readonly previousPrompts: Map<string, Array<string>>;  // maps requester to prompts that have already been seen by the requester
-  private readonly starterPrompts: Array<string>;  // some prompts that all requesters will be given at the start
+  private static readonly openAIClient: OpenAI = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  public readonly conversationPrompts = new DocCollection<ConversationPromptDoc>("conversationPrompts");
 
-  public constructor() {
-    this.openAIClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    this.cachedPrompts = new Map<string, Array<string>>();
-    this.previousPrompts = new Map<string, Array<string>>();
-
-    const starterPrompts: Array<string> = [];
-    this.starterPrompts = starterPrompts;
-    this.fetchPrompts([], starterPrompts);
+  private async getConversationPromptInfo(requesterId: ObjectId) {
+    return await this.conversationPrompts.readOne({ requesterId });
   }
 
-  public async getPrompt(requester: ObjectId): Promise<string> {
-    const id = requester.toString();
-    let cached = this.cachedPrompts.get(id);
-    if (cached === undefined) {
-      // the requester hasn't asked for any prompts before
-      this.cachedPrompts.set(id, this.starterPrompts);
-      this.previousPrompts.set(id, []);
+  private async createConversationPromptInfo(requesterId: ObjectId) {
+    const cachedPrompts: Array<string> = [];
+    await this.fetchPrompts([], cachedPrompts);
+    return await this.conversationPrompts.createOne({ requesterId, cachedPrompts, previousPrompts: [] })
+  }
+
+  public async getPrompt(requesterId: ObjectId): Promise<string> {
+    let promptInfo = await this.getConversationPromptInfo(requesterId);
+    if (promptInfo === null) {
+      await this.createConversationPromptInfo(requesterId);
+      promptInfo = await this.getConversationPromptInfo(requesterId);
     }
+    if (!promptInfo) throw new Error("This line should not be reached");
 
-    cached = this.cachedPrompts.get(id) as string[];
-    const previous = this.previousPrompts.get(id) as string[];
-
-    if (cached.length === 0) {
+    if (promptInfo.cachedPrompts.length === 0) {
       // must fetch some more prompts!
-      await this.fetchPrompts(previous, cached);
+      await this.fetchPrompts(promptInfo.previousPrompts, promptInfo.cachedPrompts);
     }
 
-    if (cached.length === 0) {
+    if (promptInfo.cachedPrompts.length === 0) {
       // all the fetched prompts were already used :(
       // in order to respond relatively quickly, let's use one of the previously
       // used prompts
-      return previous[Math.floor(Math.random() * previous.length)];
+      return promptInfo.previousPrompts[Math.floor(Math.random() * promptInfo.previousPrompts.length)];
     }
 
-    if (cached.length < Math.floor(ConversationPromptConcept.numPromptsToFetch / 2)) {
+    if (promptInfo.cachedPrompts.length < Math.floor(ConversationPromptConcept.numPromptsToFetch / 2)) {
       // running low on prompts, let's fetch some in the background (do not wait for the response)
-      this.fetchPrompts(previous, cached);
+      this.fetchPrompts(promptInfo.previousPrompts, promptInfo.cachedPrompts);
     }
 
     // let's return a new prompt!
-    const prompt = cached.pop();
+    const prompt = promptInfo.cachedPrompts.pop();
     if (prompt !== undefined) {
-      previous.push(prompt);
+      promptInfo.previousPrompts.push(prompt);
+      // store mutated data back into db
+      await this.conversationPrompts.updateOne({ requesterId }, promptInfo);
       return prompt;
     }
 
     throw new Error("This line shouldn't be reached!");
+  }
+
+  public async deleteCache(requesterId: ObjectId) {
+    await this.conversationPrompts.deleteMany({ requesterId });
   }
 
   private async fetchPrompts(previous: Array<string>, cached: Array<string>): Promise<void> {
@@ -82,10 +91,10 @@ export default class ConversationPromptConcept {
                 Provide the conversation starter, and nothing else.
             `;
 
-    const response = await this.openAIClient.chat.completions.create({
+    const response = await ConversationPromptConcept.openAIClient.chat.completions.create({
       messages: [{ role: "user", content: instructions }],
-      model: "gpt-3.5-turbo",
-      temperature: 1.2, // make responses more random,
+      model: ConversationPromptConcept.model,
+      temperature: ConversationPromptConcept.temperature,
       max_tokens: ConversationPromptConcept.maxTokens,
       n: ConversationPromptConcept.numPromptsToFetch,
     });
@@ -101,7 +110,6 @@ export default class ConversationPromptConcept {
   private postProcessPrompt(prompt: string): string {
     prompt = prompt.trim();
     prompt = prompt.replace('\n', '');
-
     return prompt;
   }
 }
