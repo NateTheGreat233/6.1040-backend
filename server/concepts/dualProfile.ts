@@ -41,8 +41,8 @@ export default class DualProfileConcept {
     }
 
     public async addToScrapbook(user: ObjectId, entry: { image: { buffer: Uint8Array, mimeType: string }, caption: string, date: Date }) {
-        const imageUrl = await storeInS3(entry.image.buffer, entry.image.mimeType);
         const profile = await this.getDualProfile(user);
+        const imageUrl = await storeInS3(entry.image.buffer, entry.image.mimeType);
         const existingScrapbook = profile.dualProfile.scrapbook;
         const updateResult = await this.dualProfiles.updateOne({ 
             $or: [{ user1: user }, { user2: user }] }, 
